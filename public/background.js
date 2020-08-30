@@ -133,48 +133,56 @@ function checkCustomSegmentHost(){
 ///////////////////
 
 chrome.webRequest.onBeforeRequest.addListener(function(details) {
-	var message;
+  var message;
+  // Request URL: https://api.dev-nova.foxtv.com/v1/t
+  const base_uri = "nova.foxtv";
+	if (
+		details.url.indexOf("www.google-analytics.com") > -1 &&
+		details.url.indexOf("/collect") > -1
+	) {
+		message = parseGAQueryString(getQueryString(details));
+	} else if (details.url.indexOf("segment.io") > -1) {
+		message = parseSegmentPayLoad(getQueryString(details));
+	} else if (details.url.indexOf(customSegmentDomain) > -1) {
+		message = parseSegmentPayLoad(getQueryString(details));
+	} else if (details.url.includes(base_uri) > -1) {
+		message = parseSegmentPayLoad(getQueryString(details));
+	}
 
-    if(details.url.indexOf('www.google-analytics.com') > -1 && details.url.indexOf('/collect') > -1 ){
-			message = parseGAQueryString(getQueryString(details));
-		}	else if(details.url.indexOf('segment.io') > -1 ){
-			message = parseSegmentPayLoad(getQueryString(details));
-		} else if(details.url.indexOf(customSegmentDomain) > -1 ){
-			message = parseSegmentPayLoad(getQueryString(details));
-		};
+  if (message) {
+    const { tabId, requestId } = details;
+    if (!tabStorage.hasOwnProperty(tabId)) {
+      return;
+    }
 
-
-		if(message){
-			const { tabId, requestId } = details;
-      if (!tabStorage.hasOwnProperty(tabId)) {
-          return;
+    //Creates Index of GA Tracking Ids;
+    if (!tabStorage[tabId].hasOwnProperty("gaTrackingIdIndex")) {
+      if (message.gaTrackingId != null) {
+        tabStorage[tabId]["gaTrackingIdIndex"] = [message.gaTrackingId];
       }
-
-			//Creates Index of GA Tracking Ids;
-			if(!tabStorage[tabId].hasOwnProperty('gaTrackingIdIndex')){
-				if(message.gaTrackingId != null){
-				  tabStorage[tabId]['gaTrackingIdIndex'] = [message.gaTrackingId];
-				}
-			} else{
-				 if(tabStorage[tabId]['gaTrackingIdIndex'].indexOf(message.gaTrackingId) == -1 && message.gaTrackingId != null){
-					 tabStorage[tabId]['gaTrackingIdIndex'].push(message.gaTrackingId);
-				 }
-			}
-
-      tabStorage[tabId].requests[requestId] = {
-          requestId: requestId,
-				  gaTrackingId: message.gaTrackingId,
-					pixelType: message.pixelType,
-          url: details.url,
-          startTime: details.timeStamp,
-          status: 'pending',
-					message: message
+    } else {
+      if (
+        tabStorage[tabId]["gaTrackingIdIndex"].indexOf(message.gaTrackingId) ==
+          -1 &&
+        message.gaTrackingId != null
+      ) {
+        tabStorage[tabId]["gaTrackingIdIndex"].push(message.gaTrackingId);
       }
+    }
 
-			updateBadge(tabId);
-		//	console.log(tabStorage[tabId].requests[requestId]);
-		}
+    tabStorage[tabId].requests[requestId] = {
+      requestId: requestId,
+      gaTrackingId: message.gaTrackingId,
+      pixelType: message.pixelType,
+      url: details.url,
+      startTime: details.timeStamp,
+      status: "pending",
+      message: message,
+    };
 
+    updateBadge(tabId);
+    //	console.log(tabStorage[tabId].requests[requestId]);
+  }
 },urlFilters,["requestBody"]);
 
 function confirmMessage(details){
